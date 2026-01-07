@@ -1,65 +1,268 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useMemo } from 'react';
+
+// Simple markdown parser
+function parseMarkdown(text: string): string {
+  let html = text
+    // Escape HTML
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Code blocks (must come before other formatting)
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold and italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Strikethrough
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr />')
+    // Unordered lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Links
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>'
+    )
+    // Line breaks (double newline = paragraph)
+    .replace(/\n\n/g, '</p><p>')
+    // Single line breaks
+    .replace(/\n/g, '<br />');
+
+  // Wrap consecutive <li> elements in <ul>
+  html = html.replace(/(<li>.*?<\/li>)(\s*<br \/>)?/g, '$1');
+  html = html.replace(/(<li>.*?<\/li>)+/g, '<ul>$&</ul>');
+
+  return `<p>${html}</p>`;
+}
+
+const initialRows = [
+  'Sharing examples of other UIs',
+  'Screenshots/Photos',
+  'Demonstrating interactions',
+  'Gesturing',
+  'Sketching',
+  'Annotating',
+  'Prompting',
+  'Choosing from options',
+  'Programming',
+];
 
 export default function Home() {
+  const [columns, setColumns] = useState(3);
+  const [data, setData] = useState<string[][]>(
+    initialRows.map((item) => [item, ...Array(columns - 1).fill('')])
+  );
+  const [notes, setNotes] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+
+  const renderedMarkdown = useMemo(() => parseMarkdown(notes), [notes]);
+
+  const updateCell = (rowIndex: number, colIndex: number, value: string) => {
+    const newData = [...data];
+    newData[rowIndex] = [...newData[rowIndex]];
+    newData[rowIndex][colIndex] = value;
+    setData(newData);
+  };
+
+  const addRow = () => {
+    setData([...data, Array(columns).fill('')]);
+  };
+
+  const addColumn = () => {
+    setColumns(columns + 1);
+    setData(data.map((row) => [...row, '']));
+  };
+
+  const deleteRow = (rowIndex: number) => {
+    if (data.length > 1) {
+      setData(data.filter((_, i) => i !== rowIndex));
+    }
+  };
+
+  const deleteColumn = (colIndex: number) => {
+    if (columns > 1) {
+      setColumns(columns - 1);
+      setData(data.map((row) => row.filter((_, i) => i !== colIndex)));
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-stone-50 p-8 font-sans">
+      <div className="mx-auto max-w-5xl">
+        <h1 className="mb-2 text-2xl font-semibold tracking-tight text-stone-800">
+          UI Input Methods
+        </h1>
+        <p className="mb-8 text-stone-500">
+          Different ways to provide input for UI customization
+        </p>
+
+        <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {Array.from({ length: columns }).map((_, colIndex) => (
+                  <th
+                    key={colIndex}
+                    className="group relative border-b border-r border-stone-200 bg-stone-100 p-0 text-left font-medium text-stone-600 last:border-r-0"
+                  >
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <span className="text-sm">
+                        {colIndex === 0
+                          ? 'Input Method'
+                          : `Column ${colIndex + 1}`}
+                      </span>
+                      {columns > 1 && (
+                        <button
+                          onClick={() => deleteColumn(colIndex)}
+                          className="ml-2 rounded p-1 text-stone-400 opacity-0 transition-opacity hover:bg-stone-200 hover:text-stone-600 group-hover:opacity-100"
+                          title="Delete column"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                ))}
+                <th className="w-10 border-b border-stone-200 bg-stone-100"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, rowIndex) => (
+                <tr key={rowIndex} className="group">
+                  {row.map((cell, colIndex) => (
+                    <td
+                      key={colIndex}
+                      className="border-b border-r border-stone-200 p-0 last:border-r-0"
+                    >
+                      <input
+                        type="text"
+                        value={cell}
+                        onChange={(e) =>
+                          updateCell(rowIndex, colIndex, e.target.value)
+                        }
+                        className="h-full w-full bg-transparent px-4 py-3 text-stone-800 outline-none placeholder:text-stone-300 focus:bg-amber-50"
+                        placeholder={colIndex === 0 ? 'New item...' : ''}
+                      />
+                    </td>
+                  ))}
+                  <td className="w-10 border-b border-stone-200 bg-stone-50">
+                    {data.length > 1 && (
+                      <button
+                        onClick={() => deleteRow(rowIndex)}
+                        className="flex h-full w-full items-center justify-center p-2 text-stone-400 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                        title="Delete row"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <div className="mt-4 flex gap-3">
+          <button
+            onClick={addRow}
+            className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-stone-800"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add Row
+          </button>
+          <button
+            onClick={addColumn}
+            className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-stone-800"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add Column
+          </button>
+        </div>
+
+        {/* Notes Section */}
+        <div className="mt-12">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-medium text-stone-700">Notes</h2>
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-stone-500 transition-colors hover:bg-stone-200 hover:text-stone-700"
+            >
+              {showPreview ? 'Edit' : 'Preview'}
+            </button>
+          </div>
+
+          {showPreview ? (
+            <div
+              className="prose min-h-[200px] rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
+              dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ) : (
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Write your notes here... Supports **bold**, *italic*, # headers, - lists, `code`, and more."
+              className="min-h-[200px] w-full resize-y rounded-lg border border-stone-200 bg-white p-4 font-mono text-sm text-stone-800 shadow-sm outline-none placeholder:text-stone-400 focus:border-stone-300 focus:ring-2 focus:ring-stone-100"
+            />
+          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
