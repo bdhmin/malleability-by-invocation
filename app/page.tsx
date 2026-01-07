@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+
+const STORAGE_KEY = 'ui-input-methods-data';
 
 // Simple markdown parser
 function parseMarkdown(text: string): string {
@@ -56,15 +58,52 @@ const initialRows = [
   'Programming',
 ];
 
+const defaultHeaders = ['Input Method', '', ''];
+const defaultData = initialRows.map((item) => [
+  item,
+  ...Array(defaultHeaders.length - 1).fill(''),
+]);
+
 export default function Home() {
-  const [columns, setColumns] = useState(3);
-  const [data, setData] = useState<string[][]>(
-    initialRows.map((item) => [item, ...Array(columns - 1).fill('')])
-  );
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [headers, setHeaders] = useState(defaultHeaders);
+  const [data, setData] = useState<string[][]>(defaultData);
   const [notes, setNotes] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
+  // Load from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.headers) setHeaders(parsed.headers);
+        if (parsed.data) setData(parsed.data);
+        if (parsed.notes) setNotes(parsed.notes);
+      } catch (e) {
+        console.error('Failed to parse saved data:', e);
+      }
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Save to localStorage whenever data changes
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ headers, data, notes })
+      );
+    }
+  }, [headers, data, notes, isLoaded]);
+
   const renderedMarkdown = useMemo(() => parseMarkdown(notes), [notes]);
+
+  const updateHeader = (colIndex: number, value: string) => {
+    const newHeaders = [...headers];
+    newHeaders[colIndex] = value;
+    setHeaders(newHeaders);
+  };
 
   const updateCell = (rowIndex: number, colIndex: number, value: string) => {
     const newData = [...data];
@@ -74,11 +113,11 @@ export default function Home() {
   };
 
   const addRow = () => {
-    setData([...data, Array(columns).fill('')]);
+    setData([...data, Array(headers.length).fill('')]);
   };
 
   const addColumn = () => {
-    setColumns(columns + 1);
+    setHeaders([...headers, '']);
     setData(data.map((row) => [...row, '']));
   };
 
@@ -89,8 +128,8 @@ export default function Home() {
   };
 
   const deleteColumn = (colIndex: number) => {
-    if (columns > 1) {
-      setColumns(columns - 1);
+    if (headers.length > 1) {
+      setHeaders(headers.filter((_, i) => i !== colIndex));
       setData(data.map((row) => row.filter((_, i) => i !== colIndex)));
     }
   };
@@ -109,21 +148,23 @@ export default function Home() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {Array.from({ length: columns }).map((_, colIndex) => (
+                {headers.map((header, colIndex) => (
                   <th
                     key={colIndex}
                     className="group relative border-b border-r border-stone-200 bg-stone-100 p-0 text-left font-medium text-stone-600 last:border-r-0"
                   >
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <span className="text-sm">
-                        {colIndex === 0
-                          ? 'Input Method'
-                          : `Column ${colIndex + 1}`}
-                      </span>
-                      {columns > 1 && (
+                    <div className="flex items-center">
+                      <input
+                        type="text"
+                        value={header}
+                        onChange={(e) => updateHeader(colIndex, e.target.value)}
+                        placeholder={`Column ${colIndex + 1}`}
+                        className="flex-1 bg-transparent px-4 py-3 text-sm font-medium text-stone-600 outline-none placeholder:text-stone-400 focus:bg-amber-50"
+                      />
+                      {headers.length > 1 && (
                         <button
                           onClick={() => deleteColumn(colIndex)}
-                          className="ml-2 rounded p-1 text-stone-400 opacity-0 transition-opacity hover:bg-stone-200 hover:text-stone-600 group-hover:opacity-100"
+                          className="mr-2 rounded p-1 text-stone-400 opacity-0 transition-opacity hover:bg-stone-200 hover:text-stone-600 group-hover:opacity-100"
                           title="Delete column"
                         >
                           <svg
