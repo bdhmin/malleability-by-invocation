@@ -114,8 +114,8 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [headers, setHeaders] = useState(defaultHeaders);
   const [data, setData] = useState<string[][]>(defaultData);
-  const [notes, setNotes] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
+  const [notes, setNotes] = useState<string[]>(['']);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -125,7 +125,14 @@ export default function Home() {
         const parsed = JSON.parse(saved);
         if (parsed.headers) setHeaders(parsed.headers);
         if (parsed.data) setData(parsed.data);
-        if (parsed.notes) setNotes(parsed.notes);
+        // Handle migration from single string to array
+        if (parsed.notes) {
+          if (Array.isArray(parsed.notes)) {
+            setNotes(parsed.notes);
+          } else if (typeof parsed.notes === 'string' && parsed.notes) {
+            setNotes([parsed.notes]);
+          }
+        }
       } catch (e) {
         console.error('Failed to parse saved data:', e);
       }
@@ -143,7 +150,26 @@ export default function Home() {
     }
   }, [headers, data, notes, isLoaded]);
 
-  const renderedMarkdown = useMemo(() => parseMarkdown(notes), [notes]);
+  const updateNote = (index: number, value: string) => {
+    const newNotes = [...notes];
+    newNotes[index] = value;
+    setNotes(newNotes);
+  };
+
+  const addNote = () => {
+    setNotes([...notes, '']);
+  };
+
+  const deleteNote = (index: number) => {
+    if (notes.length > 1) {
+      setNotes(notes.filter((_, i) => i !== index));
+      if (previewIndex === index) {
+        setPreviewIndex(null);
+      } else if (previewIndex !== null && previewIndex > index) {
+        setPreviewIndex(previewIndex - 1);
+      }
+    }
+  };
 
   const updateHeader = (colIndex: number, value: string) => {
     const newHeaders = [...headers];
@@ -660,30 +686,87 @@ export default function Home() {
         </div>
 
         {/* Notes Section */}
-        <div className="mt-12 max-w-4xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-stone-700">Notes</h2>
+        <div className="mt-12">
+          <h2 className="mb-3 text-lg font-medium text-stone-700">Notes</h2>
+
+          <div className="flex flex-wrap gap-4">
+            {notes.map((note, index) => (
+              <div
+                key={index}
+                className="group relative w-[760px] flex-shrink-0 rounded-lg border border-stone-200 bg-white shadow-sm"
+              >
+                {/* Note controls */}
+                <div className="flex items-center justify-between border-b border-stone-100 px-3 py-2">
+                  <button
+                    onClick={() =>
+                      setPreviewIndex(previewIndex === index ? null : index)
+                    }
+                    className="rounded px-2 py-1 text-xs font-medium text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600"
+                  >
+                    {previewIndex === index ? 'Edit' : 'Preview'}
+                  </button>
+                  {notes.length > 1 && (
+                    <button
+                      onClick={() => deleteNote(index)}
+                      className="rounded p-1 text-stone-400 opacity-0 transition-opacity hover:bg-stone-100 hover:text-red-500 group-hover:opacity-100"
+                      title="Delete note"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {/* Note content */}
+                {previewIndex === index ? (
+                  <div
+                    className="prose min-h-[360px] p-4"
+                    dangerouslySetInnerHTML={{
+                      __html: parseMarkdown(note),
+                    }}
+                  />
+                ) : (
+                  <textarea
+                    value={note}
+                    onChange={(e) => updateNote(index, e.target.value)}
+                    placeholder="Write notes here... Supports **bold**, *italic*, # headers, - lists, `code`"
+                    className="min-h-[360px] w-full resize-y rounded-b-lg bg-transparent p-4 font-mono text-sm text-stone-800 outline-none placeholder:text-stone-400 focus:bg-amber-50"
+                  />
+                )}
+              </div>
+            ))}
+
+            {/* Add Note button */}
             <button
-              onClick={() => setShowPreview(!showPreview)}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-stone-500 transition-colors hover:bg-stone-200 hover:text-stone-700"
+              onClick={addNote}
+              className="flex h-[400px] w-[760px] flex-shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-stone-200 text-stone-400 transition-colors hover:border-stone-300 hover:bg-stone-50 hover:text-stone-500"
             >
-              {showPreview ? 'Edit' : 'Preview'}
+              <svg
+                className="h-8 w-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
             </button>
           </div>
-
-          {showPreview ? (
-            <div
-              className="prose min-h-[200px] rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
-              dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
-            />
-          ) : (
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Write your notes here... Supports **bold**, *italic*, # headers, - lists, `code`, and more."
-              className="min-h-[200px] w-full resize-y rounded-lg border border-stone-200 bg-white p-4 font-mono text-sm text-stone-800 shadow-sm outline-none placeholder:text-stone-400 focus:border-stone-300 focus:ring-2 focus:ring-stone-100"
-            />
-          )}
         </div>
       </div>
     </div>
