@@ -205,17 +205,83 @@ export default function Home() {
   };
 
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+  const [pasteStatus, setPasteStatus] = useState<'idle' | 'pasted'>('idle');
+
+  // Escape cell for TSV: quote cells containing newlines, tabs, or quotes
+  const escapeCell = (cell: string) => {
+    if (cell.includes('\n') || cell.includes('\t') || cell.includes('"')) {
+      // Escape double quotes by doubling them, then wrap in quotes
+      return `"${cell.replace(/"/g, '""')}"`;
+    }
+    return cell;
+  };
+
+  // Parse TSV with support for quoted cells containing newlines
+  const parseTSV = (tsv: string): string[][] => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < tsv.length) {
+      const char = tsv[i];
+
+      if (inQuotes) {
+        if (char === '"') {
+          // Check for escaped quote (doubled)
+          if (tsv[i + 1] === '"') {
+            currentCell += '"';
+            i += 2;
+            continue;
+          } else {
+            // End of quoted section
+            inQuotes = false;
+            i++;
+            continue;
+          }
+        } else {
+          currentCell += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+        } else if (char === '\t') {
+          currentRow.push(currentCell);
+          currentCell = '';
+          i++;
+        } else if (char === '\n' || char === '\r') {
+          currentRow.push(currentCell);
+          currentCell = '';
+          if (currentRow.length > 0) {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          // Handle \r\n
+          if (char === '\r' && tsv[i + 1] === '\n') {
+            i += 2;
+          } else {
+            i++;
+          }
+        } else {
+          currentCell += char;
+          i++;
+        }
+      }
+    }
+
+    // Don't forget the last cell/row
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+    }
+
+    return rows;
+  };
 
   const copyTableToClipboard = async () => {
-    // Escape cell for TSV: quote cells containing newlines, tabs, or quotes
-    const escapeCell = (cell: string) => {
-      if (cell.includes('\n') || cell.includes('\t') || cell.includes('"')) {
-        // Escape double quotes by doubling them, then wrap in quotes
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    };
-
     // Convert to TSV (tab-separated values) for Google Sheets compatibility
     const headerRow = headers.map(escapeCell).join('\t');
     const dataRows = data
@@ -229,6 +295,40 @@ export default function Home() {
       setTimeout(() => setCopyStatus('idle'), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+
+  const pasteTableFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const rows = parseTSV(text);
+
+      if (rows.length > 0) {
+        // First row is headers
+        const newHeaders = rows[0];
+        const newData = rows.slice(1);
+
+        // Ensure all rows have the same number of columns
+        const maxCols = Math.max(
+          newHeaders.length,
+          ...newData.map((r) => r.length)
+        );
+        const paddedHeaders = [
+          ...newHeaders,
+          ...Array(Math.max(0, maxCols - newHeaders.length)).fill(''),
+        ];
+        const paddedData = newData.map((row) => [
+          ...row,
+          ...Array(Math.max(0, maxCols - row.length)).fill(''),
+        ]);
+
+        setHeaders(paddedHeaders);
+        setData(paddedData.length > 0 ? paddedData : [Array(maxCols).fill('')]);
+        setPasteStatus('pasted');
+        setTimeout(() => setPasteStatus('idle'), 2000);
+      }
+    } catch (err) {
+      console.error('Failed to paste:', err);
     }
   };
 
@@ -514,6 +614,46 @@ export default function Home() {
                   />
                 </svg>
                 Copy Table
+              </>
+            )}
+          </button>
+          <button
+            onClick={pasteTableFromClipboard}
+            className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-stone-800"
+          >
+            {pasteStatus === 'pasted' ? (
+              <>
+                <svg
+                  className="h-4 w-4 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                <span className="text-green-600">Pasted!</span>
+              </>
+            ) : (
+              <>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+                Paste Table
               </>
             )}
           </button>
